@@ -28,6 +28,13 @@ typedef enum : NSUInteger {
     LLCameraMirrorAuto
 } LLCameraMirror;
 
+typedef enum : NSUInteger {
+    // The default state has to be off
+    LLCameraOutputVideo,
+    LLCameraOutputFrames,
+    LLCameraOutputStill
+} LLOutputType;
+
 extern NSString *const LLSimpleCameraErrorDomain;
 typedef enum : NSUInteger {
     LLSimpleCameraErrorCodeCameraPermission = 10,
@@ -47,11 +54,6 @@ typedef enum : NSUInteger {
  * Triggered on any kind of error.
  */
 @property (nonatomic, copy) void (^onError)(LLSimpleCamera *camera, NSError *error);
-
-/**
- * Triggered when camera starts recording
- */
-@property (nonatomic, copy) void (^onStartRecording)(LLSimpleCamera* camera);
 
 /**
  * Camera quality, set a constants prefixed with AVCaptureSessionPreset.
@@ -78,11 +80,6 @@ typedef enum : NSUInteger {
  * White balance mode. Default is: AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance
  */
 @property (nonatomic) AVCaptureWhiteBalanceMode whiteBalanceMode;
-
-/**
- * Boolean value to indicate if the video is enabled.
- */
-@property (nonatomic, getter=isVideoEnabled) BOOL videoEnabled;
 
 /**
  * Boolean value to indicate if the camera is recording a video at the current moment.
@@ -130,13 +127,13 @@ typedef enum : NSUInteger {
  * Returns an instance of LLSimpleCamera with the given quality.
  * Quality parameter could be any variable starting with AVCaptureSessionPreset.
  */
-- (instancetype)initWithQuality:(NSString *)quality position:(LLCameraPosition)position videoEnabled:(BOOL)videoEnabled;
+- (instancetype)initWithQuality:(NSString *)quality position:(LLCameraPosition)position outputType:(LLOutputType)outputType;
 
 /**
  * Returns an instance of LLSimpleCamera with quality "AVCaptureSessionPresetHigh" and position "CameraPositionBack".
- * @param videEnabled: Set to YES to enable video recording.
+ * @param outputType: the required output type (Support video/frames/still).
  */
-- (instancetype)initWithVideoEnabled:(BOOL)videoEnabled;
+- (instancetype)initWithOutputType:(LLOutputType)outputType;
 
 /**
  * Starts running the camera session.
@@ -147,15 +144,6 @@ typedef enum : NSUInteger {
  * Stops the running camera session. Needs to be called when the app doesn't show the view.
  */
 - (void)stop;
-
-
-/**
- * Capture an image.
- * @param onCapture a block triggered after the capturing the photo.
- * @param exactSeenImage If set YES, then the image is cropped to the exact size as the preview. So you get exactly what you see.
- * @param animationBlock you can create your own animation by playing with preview layer.
- */
--(void)capture:(void (^)(LLSimpleCamera *camera, UIImage *image, NSDictionary *metadata, NSError *error))onCapture exactSeenImage:(BOOL)exactSeenImage animationBlock:(void (^)(AVCaptureVideoPreviewLayer *))animationBlock;
 
 /**
  * Capture an image.
@@ -171,14 +159,24 @@ typedef enum : NSUInteger {
 -(void)capture:(void (^)(LLSimpleCamera *camera, UIImage *image, NSDictionary *metadata, NSError *error))onCapture;
 
 /*
- * Start recording a video with a completion block. Video is saved to the given url.
+ * Start recording a video. Video is saved to the given url.
  */
-- (void)startRecordingWithOutputUrl:(NSURL *)url didRecord:(void (^)(LLSimpleCamera *camera, NSURL *outputFileUrl, NSError *error))completionBlock;
+- (void)startVideoRecordingWithOutputUrl:(NSURL *)url;
+
+/*
+ * Start frames recording frames.
+ */
+-(void)startFramesRecordingWithDelegate:(id<AVCaptureVideoDataOutputSampleBufferDelegate>)videoDataOutputSampleBufferDelegate;
 
 /**
- * Stop recording video.
+ * Stop recording video with a completion block.
  */
-- (void)stopRecording;
+-(void)stopVideoRecording:(void (^)(LLSimpleCamera *camera, NSURL *outputFileUrl, NSError *error))completionBlock;
+
+/**
+ * Stop recording frames
+ */
+-(void)stopFramesRecording;
 
 /**
  * Attaches the LLSimpleCamera to another view controller with a frame. It basically adds the LLSimpleCamera as a
@@ -224,4 +222,5 @@ typedef enum : NSUInteger {
  * Checks is the rear camera is available.
  */
 + (BOOL)isRearCameraAvailable;
+
 @end
