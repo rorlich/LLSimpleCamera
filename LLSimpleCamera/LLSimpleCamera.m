@@ -10,7 +10,7 @@
 #import <ImageIO/CGImageProperties.h>
 #import "UIImage+FixOrientation.h"
 
-@interface LLSimpleCamera () <AVCaptureFileOutputRecordingDelegate, UIGestureRecognizerDelegate>
+@interface LLSimpleCamera () <AVCaptureFileOutputRecordingDelegate, AVCaptureVideoDataOutputSampleBufferDelegate, UIGestureRecognizerDelegate>
 @property (strong, nonatomic) UIView *preview;
 @property (strong, nonatomic) AVCaptureStillImageOutput *stillImageOutput;
 @property (strong, nonatomic) AVCaptureSession *session;
@@ -28,7 +28,7 @@
 @property (strong, nonatomic) UIPinchGestureRecognizer *pinchGesture;
 @property (nonatomic, assign) CGFloat beginGestureScale;
 @property (nonatomic, assign) CGFloat effectiveScale;
-@property (nonatomic, assign) LLOutputType outputType;
+
 @property (nonatomic,strong) dispatch_queue_t videoDataOutputQueue;
 @property (nonatomic,unsafe_unretained)   AVCaptureConnection* captureConnection;
 @property (nonatomic,weak) id<AVCaptureVideoDataOutputSampleBufferDelegate> delegate;
@@ -202,6 +202,11 @@ NSString *const LLSimpleCameraErrorDomain = @"LLSimpleCameraErrorDomain";
     }];
 }
 
+-(void)setOutputType:(LLOutputType)outputType {
+    _outputType = outputType;
+    [self initializeOutputs];
+}
+
 - (void)initialize
 {
     if(!_session) {
@@ -260,48 +265,8 @@ NSString *const LLSimpleCameraErrorDomain = @"LLSimpleCameraErrorDomain";
             self.captureVideoPreviewLayer.connection.videoOrientation = [self orientationForConnection];
         }
         
-        // add audio if video is enabled
-        if(self.outputType == LLCameraOutputVideo) {
-            _audioCaptureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
-            _audioDeviceInput = [AVCaptureDeviceInput deviceInputWithDevice:_audioCaptureDevice error:&error];
-            if (!_audioDeviceInput) {
-                if(self.onError) {
-                    self.onError(self, error);
-                }
-            }
-            
-            if([self.session canAddInput:_audioDeviceInput]) {
-                [self.session addInput:_audioDeviceInput];
-            }
-            
-            _movieFileOutput = [[AVCaptureMovieFileOutput alloc] init];
-            [_movieFileOutput setMovieFragmentInterval:kCMTimeInvalid];
-            if([self.session canAddOutput:_movieFileOutput]) {
-                [self.session addOutput:_movieFileOutput];
-            }
-        } else if (self.outputType == LLCameraOutputFrames) {
-            // Initialize image output
-            self.videoDataOutput = [AVCaptureVideoDataOutput new];
-            
-            NSDictionary *rgbOutputSettings = [NSDictionary dictionaryWithObject:
-                                               [NSNumber numberWithInt:/*kCVPixelFormatType_32BGRA*/kCVPixelFormatType_32BGRA] forKey:(id)kCVPixelBufferPixelFormatTypeKey];
-            [self.videoDataOutput setVideoSettings:rgbOutputSettings];
-            [self.videoDataOutput setAlwaysDiscardsLateVideoFrames:YES]; // discard if the data output queue is blocked (as we process the still image)
-            
-            
-            self.videoDataOutputQueue = dispatch_queue_create("VideoDataOutputQueue", DISPATCH_QUEUE_SERIAL);
-            
-            [self.videoDataOutput setSampleBufferDelegate:self queue:self.videoDataOutputQueue];
-            
-            
-            if( [self.session canAddOutput:self.videoDataOutput] ){
-                [self.session addOutput:self.videoDataOutput];
-            }
-            
-            self.captureConnection = [self.videoDataOutput connectionWithMediaType:AVMediaTypeVideo];
-            [self.captureConnection setEnabled:YES];
-
-        }
+        
+        [self initializeOutputs];
         
         // continiously adjust white balance
         self.whiteBalanceMode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;
@@ -321,6 +286,63 @@ NSString *const LLSimpleCameraErrorDomain = @"LLSimpleCameraErrorDomain";
     [self.session startRunning];
 }
 
+-(void)initializeOutputs {
+    if (!_session)
+        return;
+    
+    // Remove outputs
+    for (id output in self.session.outputs)
+         [self.session removeOutput:output];
+    
+    // Remove inputs
+    if (self.audioDeviceInput)
+        [self.session removeInput:self.audioDeviceInput];
+    
+    NSError* error = nil;
+    
+    // add audio if video is enabled
+    if(self.outputType == LLCameraOutputVideo) {
+        _audioCaptureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
+        _audioDeviceInput = [AVCaptureDeviceInput deviceInputWithDevice:_audioCaptureDevice error:&error];
+        if (!_audioDeviceInput) {
+            if(self.onError) {
+                self.onError(self, error);
+            }
+        }
+        
+        if([self.session canAddInput:_audioDeviceInput]) {
+            [self.session addInput:_audioDeviceInput];
+        }
+        
+        _movieFileOutput = [[AVCaptureMovieFileOutput alloc] init];
+        [_movieFileOutput setMovieFragmentInterval:kCMTimeInvalid];
+        if([self.session canAddOutput:_movieFileOutput]) {
+            [self.session addOutput:_movieFileOutput];
+        }
+    } else if (self.outputType == LLCameraOutputFrames) {
+        // Initialize image output
+        self.videoDataOutput = [AVCaptureVideoDataOutput new];
+        
+        NSDictionary *rgbOutputSettings = [NSDictionary dictionaryWithObject:
+                                           [NSNumber numberWithInt:/*kCVPixelFormatType_32BGRA*/kCVPixelFormatType_32BGRA] forKey:(id)kCVPixelBufferPixelFormatTypeKey];
+        [self.videoDataOutput setVideoSettings:rgbOutputSettings];
+        [self.videoDataOutput setAlwaysDiscardsLateVideoFrames:YES]; // discard if the data output queue is blocked (as we process the still image)
+        
+        
+        self.videoDataOutputQueue = dispatch_queue_create("VideoDataOutputQueue", DISPATCH_QUEUE_SERIAL);
+        
+        __weak id<AVCaptureVideoDataOutputSampleBufferDelegate> delegate = self;
+        [self.videoDataOutput setSampleBufferDelegate:delegate queue:self.videoDataOutputQueue];
+        
+        if( [self.session canAddOutput:self.videoDataOutput] ){
+            [self.session addOutput:self.videoDataOutput];
+        }
+        
+        self.captureConnection = [self.videoDataOutput connectionWithMediaType:AVMediaTypeVideo];
+        [self.captureConnection setEnabled:YES];
+    }
+
+}
 - (void)stop
 {
     [self.session stopRunning];
