@@ -46,6 +46,11 @@ typedef enum : NSUInteger {
 @interface LLSimpleCamera : UIViewController
 
 /**
+ * Set output type (supports Video/Frames/Still)
+ */
+@property (nonatomic, assign) LLOutputType outputType;
+
+/**
  * Triggered on device change.
  */
 @property (nonatomic, copy) void (^onDeviceChange)(LLSimpleCamera *camera, AVCaptureDevice *device);
