@@ -205,6 +205,7 @@ NSString *const LLSimpleCameraErrorDomain = @"LLSimpleCameraErrorDomain";
 -(void)setOutputType:(LLOutputType)outputType {
     _outputType = outputType;
     [self initializeOutputs];
+    
 }
 
 - (void)initialize
@@ -265,9 +266,10 @@ NSString *const LLSimpleCameraErrorDomain = @"LLSimpleCameraErrorDomain";
             self.captureVideoPreviewLayer.connection.videoOrientation = [self orientationForConnection];
         }
         
-        
+
         [self initializeOutputs];
         
+
         // continiously adjust white balance
         self.whiteBalanceMode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;
         
@@ -341,6 +343,9 @@ NSString *const LLSimpleCameraErrorDomain = @"LLSimpleCameraErrorDomain";
         self.captureConnection = [self.videoDataOutput connectionWithMediaType:AVMediaTypeVideo];
         [self.captureConnection setEnabled:YES];
     }
+    
+    AVCaptureConnection *connection = [self captureConnection];
+    connection.videoOrientation = [self orientationForConnection];
 
 }
 - (void)stop
@@ -442,6 +447,7 @@ NSString *const LLSimpleCameraErrorDomain = @"LLSimpleCameraErrorDomain";
 }
 
 -(void)startFramesRecordingWithDelegate:(id<AVCaptureVideoDataOutputSampleBufferDelegate>)videoDataOutputSampleBufferDelegate {
+    
     self.delegate = videoDataOutputSampleBufferDelegate;
     self.recording = YES;
 }
@@ -519,8 +525,9 @@ NSString *const LLSimpleCameraErrorDomain = @"LLSimpleCameraErrorDomain";
 
 - (AVCaptureConnection *)captureConnection
 {
+    AVCaptureOutput* output = self.stillImageOutput ? self.stillImageOutput : self.videoDataOutput;
     AVCaptureConnection *videoConnection = nil;
-    for (AVCaptureConnection *connection in self.stillImageOutput.connections) {
+    for (AVCaptureConnection *connection in output.connections) {
         for (AVCaptureInputPort *port in [connection inputPorts]) {
             if ([[port mediaType] isEqual:AVMediaTypeVideo]) {
                 videoConnection = connection;
